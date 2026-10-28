@@ -129,6 +129,7 @@ deploy/
   stack.yml               reference stack (etcd, HAProxy pinned; hippo images filled in at release)
 tests/
   pins/                   pins = contents check
+  sbom/                   SBOM = contents check
   smoke/                  3-node Swarm smoke test, grown out of lab/
 releases/<line>/          one per release line: hippo (base image), hippo-ext (ext image)
   VERSION                 current release version (semver, ours)
@@ -157,7 +158,7 @@ Layout rules:
 | `postgres:18` base image | `images/base/Dockerfile`, tag + digest | `docker` (Docker Hub) | yes | patch / digest |
 | Patroni + Python deps | `images/base/requirements.lock` | `pypi` | yes | patch |
 | PGDG extensions | `images/ext/extensions.yaml` | `deb` (custom regex manager) | no timestamps → weekly grouped PR | `upgrade: plain` only |
-| etcd, HAProxy (reference stack) | `deploy/stack.yml`, tag + digest | `github-releases` / `docker` | yes | patch |
+| etcd, HAProxy (reference stack) | `deploy/stack.yml`, tag | `github-releases` / `docker` | yes | patch |
 | GitHub Actions | workflows, SHA-pinned | `github-actions` | yes | yes |
 | Tegami | `package.json` lockfile | `npm` | yes | **no** (young, plugin API undocumented) |
 
@@ -208,7 +209,7 @@ push to main
   └ release workflow (serialized: one run at a time, never cancelled)
      with pending .tegami entries:
        1. build base and ext from HEAD (one bake build, amd64 + arm64) → push candidate-<sha>[-ext]
-       2. test the pushed images: pins = contents, Swarm smoke test
+       2. test the pushed images: pins = contents, SBOM = contents, Swarm smoke test
        3. tegami version → open / regenerate the Version PR; for each bumped line:
             VERSION       bumped
             CHANGELOG.md  the PRs' .tegami entries + the package diff against the line's last release
@@ -277,7 +278,7 @@ next push regenerates everything.
 | **Pins = contents** | every build | the packages installed in the image (`dpkg-query`, `pip freeze`) match the pin files exactly |
 | **SBOM = contents** | every build, and the SBOM attached to each candidate | every file is owned by a deb/pip package or declared in `components.yaml`; every package and component is in the SBOM, with a license (see [licenses](licenses.md)) |
 | **Candidate = tree** | before promotion | `git diff --quiet <CANDIDATE.source> HEAD -- <the line's inputs>`: the shipped content being released is what the candidate was built from |
-| **Published = candidate** | after promotion | every release tag on both registries resolves to the `CANDIDATE` digests |
+| **Published = candidate** | after promotion | every release tag resolves to the `CANDIDATE` digests |
 
 The "candidate = tree" check also covers the race where `main` moves while a Version PR is
 open: the newer push has regenerated the PR anyway, and merging a stale one fails closed
@@ -297,9 +298,8 @@ branch. This keeps working without special cases because:
 - **Renovate keeps owning its branch.** The fixer App is in Renovate's `gitIgnoredAuthors`,
   so its commit does not stop Renovate from rebasing. A rebase drops the entry commit, and
   the next sync writes it again.
-- **The bump level comes from Renovate.** Renovate labels each PR with its update type, and
-  the workflow maps that to the entry's bump (patch by default, minor for e.g. a Patroni
-  minor).
+- **Every dependency update is a patch release**, lock file maintenance included. A reviewer
+  can raise the bump in the entry file.
 
 The "change = entry" invariant applies to every PR, human or bot alike.
 
@@ -319,14 +319,11 @@ The "change = entry" invariant applies to every PR, human or bot alike.
    `shared_preload_libraries`. They ship installed but disabled; document how to enable
    them (`patronictl edit-config` + restart) and decide whether `ext` should preload any
    of them by default.
-8. Inject the derived package diff into the new version's changelog during `tegami
-   version` (plugin `applyDraft` hook, unverified), or as a post-processing step on
-   `CHANGELOG.md`.
-9. Auto-merging the Version PR. Manual for now; later tooling (needs an App token so the
+8. Auto-merging the Version PR. Manual for now; later tooling (needs an App token so the
    PR's checks run).
-10. OS-only updates (no pin changed, but Debian packages did): need a trigger, e.g. a
-    weekly `apt list --upgradable` check against the last release. Deferred.
-11. Retention policy for `candidate-*` tags on GHCR.
-12. Documentation site: build `docs/` with [Zensical](https://zensical.org) later. For now
+9. OS-only updates (no pin changed, but Debian packages did): need a trigger, e.g. a
+   weekly `apt list --upgradable` check against the last release. Deferred.
+10. Retention policy for `candidate-*` tags on GHCR.
+11. Documentation site: build `docs/` with [Zensical](https://zensical.org) later. For now
     the docs are plain Markdown in the repo.
-13. Release assets: the rendered stack file with release digests, and the package manifest.
+12. Release assets: the rendered stack file with release digests, and the package manifest.
