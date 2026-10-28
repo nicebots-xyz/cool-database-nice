@@ -124,6 +124,7 @@ images/
 deploy/
   stack.yml               reference stack (etcd, HAProxy pinned; hippo images filled in at release)
 tests/
+  pins/                   pins = contents check
   smoke/                  3-node Swarm smoke test, grown out of lab/
 releases/hippo/
   VERSION                 current release version (semver, ours)
@@ -133,6 +134,7 @@ releases/hippo/
 scripts/                  Tegami config + plugins, release scripts (as in botkit)
 docs/                     design + user docs
 lab/                      experiments, never shipped
+docker-bake.hcl         the one build definition (ext builds on the base target of the same build)
 renovate.json, package.json, pnpm-lock.yaml   repo-level config; Node is release tooling only
 ```
 

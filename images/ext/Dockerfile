@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-# The base image is passed by digest, so ext is always exactly that base plus extensions.
-ARG BASE
+# The base comes from the `hippo-base` named build context (see docker-bake.hcl), so ext is always
+# exactly the base of the same build plus extensions. BASE can also point at a base image by digest.
+ARG BASE=hippo-base
 FROM ${BASE}
 
 USER root

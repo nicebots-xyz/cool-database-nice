@@ -60,8 +60,10 @@ quiet node sh -c "cd /deploy && HIPPO_IMAGE=$IMAGE docker stack deploy --detach=
 wait_for 300 "the cluster to converge" converged
 log "cluster converged"
 
+# Swarm publishes a task's names once it is healthy, which can trail convergence by a healthcheck interval.
+resolves() { svc hippo_pg getent hosts "$1"; }
 for h in pg-1 pg-2 pg-3 etcd-1 etcd-2 etcd-3; do
-  svc hippo_pg getent hosts "$h" >/dev/null || fail "member hostname $h does not resolve"
+  wait_for 60 "member hostname $h to resolve" resolves "$h"
 done
 log "member hostnames resolve"
 
