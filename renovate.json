@@ -119,6 +119,37 @@
       "automerge": false
     },
     {
+      "description": "Where an update lands, as a label: the image build (Dockerfiles, Patroni's Python dependencies).",
+      "matchFileNames": ["images/*/Dockerfile", "images/base/requirements.{in,lock}"],
+      "addLabels": ["area:image"]
+    },
+    {
+      "description": "The PGDG extensions of the ext image.",
+      "matchFileNames": ["images/ext/extensions.yaml"],
+      "addLabels": ["area:extensions"]
+    },
+    {
+      "description": "The reference stack.",
+      "matchFileNames": ["deploy/**"],
+      "addLabels": ["area:deploy"]
+    },
+    {
+      "description": "CI and release tooling: workflows, the tools they run, Tegami.",
+      "matchFileNames": [".github/**", "package.json", "pnpm-lock.yaml"],
+      "addLabels": ["area:ci"]
+    },
+    {
+      "description": "Lock file maintenance PRs name their lock file: each lock file already gets a PR of its own.",
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "matchManagers": ["pip-compile"],
+      "commitMessageTopic": "images/base/requirements.lock"
+    },
+    {
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "matchManagers": ["npm"],
+      "commitMessageTopic": "pnpm-lock.yaml"
+    },
+    {
       "description": "Extensions that may need ALTER EXTENSION … UPDATE: separate PR, reviewed by hand until the image can run the update itself.",
       "matchDepTypes": ["alter"],
       "groupName": "PGDG extensions (needs ALTER EXTENSION)",
