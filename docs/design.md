@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MIT
+Copyright: 2026 NiceBots.xyz
+-->
 # hippo — design overview
 
 ## Goal

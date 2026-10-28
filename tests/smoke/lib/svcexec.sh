@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 # usage: svcexec.sh <service> <cmd...>  — exec in the first running task of a service in the lab
 svc=$1; shift
 for n in 1 2 3; do

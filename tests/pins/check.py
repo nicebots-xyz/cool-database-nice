@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 """Pins = contents: checks that an image contains exactly what its pin files declare.
 
 usage: python3 tests/pins/check.py <base|ext> <image>

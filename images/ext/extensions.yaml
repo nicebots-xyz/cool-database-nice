@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 # Extensions installed in the ext variant, pinned to exact PGDG package versions.
 #
 # Keep the field order package → version → upgrade → upstream: Renovate's regex manager relies on it.

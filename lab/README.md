@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MIT
+Copyright: 2026 NiceBots.xyz
+-->
 # hippo lab
 
 Throwaway 3-node Docker Swarm built from docker-in-docker containers, for validating the

@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 # Inserts a row every 0.25s via two paths; logs every failure, totals on SIGTERM.
 DIRECT="host=pg-1,pg-2,pg-3 dbname=postgres user=postgres connect_timeout=2 target_session_attrs=read-write"
 VIAHA="host=tasks.pg-haproxy port=5000 dbname=postgres user=postgres connect_timeout=2"

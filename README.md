@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MIT
+Copyright: 2026 NiceBots.xyz
+-->
 # hippo
 
 Highly available PostgreSQL 18 for Docker Swarm: Patroni + etcd + HAProxy, deployed with a
