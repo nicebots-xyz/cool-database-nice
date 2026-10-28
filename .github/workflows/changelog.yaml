@@ -1,7 +1,7 @@
 name: Changelog
 
 # Change = entry: a pull request that changes shipped content (images/, deploy/) must add a
-# changelog entry in .tegami/. Renovate pull requests get theirs from the Tegami Renovate workflow.
+# changelog entry in .tegami/ (or amend a pending one). Renovate pull requests get theirs from the Tegami Renovate workflow.
 
 on:
   pull_request:
@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  entry:
+  changelog:
+    name: changelog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,7 +29,8 @@ jobs:
             echo "No shipped content changed, no entry needed."
             exit 0
           fi
-          entries=$(git diff --name-only --diff-filter=A "$BASE...$HEAD" -- '.tegami/*.md')
+          # Adding an entry or amending a pending one both count as writing the changelog.
+          entries=$(git diff --name-only --diff-filter=AM "$BASE...$HEAD" -- '.tegami/*.md')
           if [ -z "$entries" ]; then
             echo "::error::This pull request changes shipped content but adds no changelog entry in .tegami/."
             echo "Changed: $shipped"
