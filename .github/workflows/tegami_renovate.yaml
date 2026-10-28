@@ -14,7 +14,8 @@ permissions:
   contents: read
 
 jobs:
-  entry:
+  renovate-entry:
+    name: renovate changelog entry
     if: >
       startsWith(github.head_ref, 'renovate/') &&
       github.event.pull_request.head.repo.full_name == github.repository
@@ -42,8 +43,9 @@ jobs:
         uses: nicebots-xyz/fixer@88ee2672a9ac070e4c4e4d49488c78805679ee79 # v1.0.1
 
   push:
-    needs: entry
-    if: needs.entry.outputs.changed == 'true'
+    name: renovate changelog push
+    needs: renovate-entry
+    if: needs.renovate-entry.outputs.changed == 'true'
     uses: nicebots-xyz/fixer/.github/workflows/push.yaml@88ee2672a9ac070e4c4e4d49488c78805679ee79 # v1.0.1
     with:
       commit-message: "chore(deps): Add changelog entry"
