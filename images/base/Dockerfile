@@ -4,13 +4,12 @@ FROM postgres:18.6-trixie@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4
 # Patroni lives in its own venv, installed strictly from the hashed lock. Wheels are preferred; a few
 # pure-Python deps only ship source packages, and with no compiler in the image any source package
 # needing one fails the build instead of slipping in.
-COPY requirements.lock /tmp/requirements.lock
-RUN apt-get update \
+RUN --mount=type=bind,source=requirements.lock,target=/tmp/requirements.lock \
+    apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv \
  && rm -rf /var/lib/apt/lists/* \
  && python3 -m venv /opt/patroni \
  && /opt/patroni/bin/pip install --no-cache-dir --prefer-binary --require-hashes -r /tmp/requirements.lock \
- && rm /tmp/requirements.lock \
  && install -d -o postgres -g postgres -m 0700 /var/lib/postgresql/data
 
 # Image tooling, and the declarations of everything no package manager owns: they become an SBOM fragment
