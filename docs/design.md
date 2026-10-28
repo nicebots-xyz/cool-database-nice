@@ -206,15 +206,16 @@ request's squash commit, `… (#N)`.
 
 ```
 push to main
-  └ release workflow (serialized: one run at a time, never cancelled)
+  └ release workflow
      with pending .tegami entries:
+       0. wait 15 min; a newer push cancels the wait, so only the last push of a burst builds
        1. build base and ext from HEAD (one bake build, amd64 + arm64) → push candidate-<sha>[-ext]
        2. test the pushed images: pins = contents, SBOM = contents, Swarm smoke test
-       3. tegami version → open / regenerate the Version PR; for each bumped line:
+       3. tegami version (one at a time, skipped once main moved on) → open / regenerate the Version PR; for each bumped line:
             VERSION       bumped
             CHANGELOG.md  the PRs' .tegami entries + the package diff against the line's last release
             CANDIDATE     source commit, PostgreSQL major, candidate digest
-     without (the Version PR was merged):
+     without (the Version PR was merged), right away and one at a time:
        tegami publish, per bumped line:
        1. candidate = tree: the line's inputs are unchanged since CANDIDATE's source commit
        2. promote: point the release tags at the candidate digest (no rebuild)
@@ -225,6 +226,9 @@ push to main
 Versioning refuses to run without candidates, so a Version PR always describes tested images. A failed
 promotion leaves no tag and no release behind, and re-running a publish is a no-op once the tags point at
 the candidate.
+
+Only the wait is ever cancelled: a run past it is never stopped halfway through pushing to GHCR or GitHub. Versioning
+and publishing queue apart, so a newer push can only replace a queued run of the same kind, before it started.
 
 The candidate is built in the push-to-main run rather than in the Version PR's own CI because PRs created
 with `GITHUB_TOKEN` do not trigger workflows: the run that writes the Version PR has already built and
