@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 # Inserts one row every 0.25s through two paths (libpq multi-host, HAProxy) and records the id of every
 # acknowledged and every failed insert in /tmp/<acked|failed>-<path>. Once /tmp/stop exists it prints the
 # totals and idles, so run.sh can read the id files and compare them with the table.

@@ -1,0 +1,25 @@
+name: Licenses
+
+# Every source file carries the project's SPDX license header (licensor-config.yaml).
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  license-headers:
+    name: license headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: nicebots-xyz/licensor/.github/actions/setup-licensor@37494a5725e20bb1130b43bff1a599daa1d759b0 # v0.1.1
+        with:
+          # renovate: datasource=github-releases depName=nicebots-xyz/licensor
+          version: v0.1.1
+
+      - name: Check license headers
+        run: licensor check --ignore ".*" -- *

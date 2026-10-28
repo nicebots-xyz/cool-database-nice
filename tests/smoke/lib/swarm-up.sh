@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 # Creates a throwaway 3-node Docker Swarm out of docker-in-docker containers (hippo-lab1..3),
 # labels every node hippo.pg=true and preloads the given images on each node.
 # usage: swarm-up.sh <image>...

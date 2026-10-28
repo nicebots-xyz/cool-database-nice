@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
 # Smoke test: deploys deploy/stack.yml on a throwaway 3-node dind swarm with the given hippo image,
 # forces a rolling update of every Postgres member under write load, and checks that:
 #   - the templated member hostnames resolve,

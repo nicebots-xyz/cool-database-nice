@@ -36,6 +36,14 @@
     },
     {
       "customType": "regex",
+      "description": "Tool versions installed by actions, annotated with a `# renovate:` comment (e.g. licensor's release next to its setup action).",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s+version: (?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "customType": "regex",
       "description": "etcd in the reference stack, tracked through GitHub releases: its registries (quay.io, gcr.io) give no release timestamps, so a cooldown could never be met there.",
       "managerFilePatterns": ["/^deploy/stack\\.yml$/"],
       "matchStrings": ["image: quay\\.io/coreos/etcd:(?<currentValue>v\\S+)"],
@@ -90,6 +98,11 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor"],
       "automerge": true
+    },
+    {
+      "description": "The licensor action and the release it installs move together.",
+      "matchPackageNames": ["nicebots-xyz/licensor"],
+      "groupName": "licensor"
     },
     {
       "description": "Tegami is young and the release plugins use its barely documented plugin API: always reviewed.",
