@@ -4,10 +4,12 @@ Throwaway 3-node Docker Swarm built from docker-in-docker containers, for valida
 single-service design. Nothing here touches the host's own Docker daemon swarm state.
 
 ```sh
-./lab-up.sh                         # (re)create hippo-lab1..3 and form the swarm
-./svcexec.sh <service> <cmd...>     # exec into a running task of a lab service
-docker rm -f hippo-lab1 hippo-lab2 hippo-lab3 && docker network rm hippo-lab   # tear down
+../tests/smoke/lib/swarm-up.sh <image>...    # (re)create hippo-lab1..3, form the swarm, preload images
+../tests/smoke/lib/svcexec.sh <service> <cmd...>   # exec into a running task of a lab service
+../tests/smoke/lib/swarm-down.sh             # tear down
 ```
+
+The helpers live in `tests/smoke/lib/`; the smoke test (`tests/smoke/run.sh`) grew out of t3.
 
 Lab-only quirks: `DOCKER_IGNORE_BR_NETFILTER_ERROR=1` (host lacks br_netfilter), and Swarm
 VIPs don't route inside dind (IPVS) — irrelevant since the design uses `endpoint_mode: dnsrr`.
