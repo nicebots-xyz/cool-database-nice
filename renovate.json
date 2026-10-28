@@ -44,6 +44,15 @@
     },
     {
       "customType": "regex",
+      "description": "Container images run by workflows, annotated with `# renovate: datasource=docker` (e.g. the SBOM scanner).",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=docker\\n\\s+\\S+: (?<depName>[^\\s:]+):(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "description": "etcd in the reference stack, tracked through GitHub releases: its registries (quay.io, gcr.io) give no release timestamps, so a cooldown could never be met there.",
       "managerFilePatterns": ["/^deploy/stack\\.yml$/"],
       "matchStrings": ["image: quay\\.io/coreos/etcd:(?<currentValue>v\\S+)"],

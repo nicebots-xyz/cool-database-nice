@@ -15,6 +15,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # The SBOM scanner BuildKit uses for release attestations is syft too.
+  # renovate: datasource=docker
+  SYFT_IMAGE: anchore/syft:v1.51.0@sha256:678bfa565b60f747aac0f8e964fe5588a24445b8d0a480e91f6efd70020dfbb0
+
 jobs:
   test:
     name: build-test (${{ matrix.variant }})
@@ -37,6 +42,13 @@ jobs:
 
       - name: Pins = contents
         run: python3 tests/pins/check.py ${{ matrix.variant }} ${{ matrix.image }}
+
+      - name: SBOM = contents
+        run: |
+          docker save "${{ matrix.image }}" -o "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP:/scan:ro" "$SYFT_IMAGE" docker-archive:/scan/image.tar \
+            -o spdx-json -q --select-catalogers +sbom-cataloger > "$RUNNER_TEMP/sbom.json"
+          python3 tests/sbom/check.py "${{ matrix.image }}" "$RUNNER_TEMP/sbom.json"
 
       - name: Smoke test
         run: tests/smoke/run.sh ${{ matrix.image }}

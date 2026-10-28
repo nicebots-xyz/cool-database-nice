@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: MIT
+# Copyright: 2026 NiceBots.xyz
+#
+# Everything in the base image that dpkg and pip do not own, so that the image's SBOM covers all of it.
+#
+# components: software, each with its license, merged into the image's SBOM.
+#   paths: the files it consists of (globs; each must match).
+#   purl: a package the SBOM scanner detects without a license; this declaration supplies it.
+# generated: files that are state or configuration produced by package scripts or the build, not software.
+#
+# tests/sbom/check.py fails on any file that is neither owned nor declared, on any declaration that matches
+# nothing, and on any SBOM package without a license.
+
+components:
+  - name: gosu
+    license: Apache-2.0
+    source: https://github.com/tianon/gosu
+    purl: pkg:golang/github.com/tianon/gosu
+    paths: [/usr/local/bin/gosu]
+  - name: github.com/moby/sys/user
+    comment: compiled into gosu
+    license: Apache-2.0
+    source: https://github.com/moby/sys
+    purl: pkg:golang/github.com/moby/sys/user
+  - name: golang.org/x/sys
+    comment: compiled into gosu
+    license: BSD-3-Clause
+    source: https://go.googlesource.com/sys
+    purl: pkg:golang/golang.org/x/sys
+  - name: wcwidth
+    comment: the scanner does not read its license metadata
+    license: MIT
+    source: https://github.com/jquast/wcwidth
+    purl: pkg:pypi/wcwidth
+  - name: docker-library postgres scripts
+    comment: from the official postgres image
+    license: MIT
+    source: https://github.com/docker-library/postgres
+    paths: [/usr/local/bin/docker-entrypoint.sh, /usr/local/bin/docker-ensure-initdb.sh]
+  - name: hippo image tooling
+    license: MIT
+    source: https://github.com/nicebots-xyz/hippo
+    paths: [/usr/local/bin/hippo-manifest, /usr/local/lib/hippo/**]
+
+generated:
+  - reason: package manager and maintainer script state
+    paths: [/var/lib/**, /var/cache/**, /var/log/**, /run/**]
+  - reason: Python bytecode compiled from packaged sources
+    paths: [/**/__pycache__/*.pyc]
+  - reason: system configuration written by package scripts and the base image build
+    paths:
+      - /etc/**
+      - /usr/sbin/policy-rc.d
+      - /usr/lib/locale/locale-archive
+      - /usr/local/share/keyrings/postgres.gpg.asc
+      - /usr/share/postgresql/postgresql.conf.sample
+      - /usr/share/postgresql/postgresql.conf.sample.dpkg
+      - /root/.bashrc
+      - /root/.profile
+  - reason: Python venv scaffolding written by python3 -m venv (python3.13-venv)
+    paths: [/opt/patroni/pyvenv.cfg, /opt/patroni/.gitignore, /opt/patroni/bin/activate*, /opt/patroni/bin/Activate.ps1]
+  - reason: this image's SBOM fragments, generated from these declarations
+    paths: [/usr/share/hippo/sbom/*.spdx.json]
