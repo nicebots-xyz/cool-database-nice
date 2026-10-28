@@ -1,0 +1,53 @@
+name: CI
+
+# Builds every variant, checks it against its pins and runs the Swarm smoke test on it.
+# arm64 is built under QEMU to catch platform breakage, but only amd64 is smoke-tested.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [base, ext]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build
+        run: docker buildx bake --load ${{ matrix.variant }}
+
+      - name: Pins = contents
+        run: python3 tests/pins/check.py ${{ matrix.variant }} hippo-dev/${{ matrix.variant }}:18
+
+      - name: Smoke test
+        run: tests/smoke/run.sh hippo-dev/${{ matrix.variant }}:18
+
+  arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build
+        run: docker buildx bake --set '*.platform=linux/arm64' --set '*.output=type=cacheonly'
