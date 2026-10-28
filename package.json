@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "description": "Release tooling for hippo (changelogs, versioning and image promotion via Tegami). Not a Node project.",
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "tegami": "node scripts/tegami.mts"
+  },
+  "devDependencies": {
+    "tegami": "1.5.0"
+  }
+}

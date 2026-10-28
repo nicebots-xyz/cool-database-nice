@@ -1,0 +1,169 @@
+name: Release
+
+# Runs on every push to main, one run at a time:
+# - With pending changelog entries: builds candidate images from HEAD (GHCR, candidate-<sha>[-ext]), tests the
+#   exact pushed images, then Tegami opens or refreshes the Version Packages pull request, which records
+#   their digests in releases/<line>/CANDIDATE and the package diff in the changelog.
+# - Without (e.g. the Version Packages pull request was merged): Tegami publishes. Each bumped line's
+#   candidate digest is promoted to its release tags, then the git tag and the GitHub release are created.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/nicebots-xyz/hippo
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      candidate: ${{ steps.plan.outputs.candidate }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: plan
+        name: Pending changelog entries?
+        run: |
+          if ls .tegami/*.md >/dev/null 2>&1; then echo candidate=true; else echo candidate=false; fi >> "$GITHUB_OUTPUT"
+
+  candidate:
+    needs: plan
+    if: needs.plan.outputs.candidate == 'true'
+    name: build candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base: ${{ steps.build.outputs.base }}
+      ext: ${{ steps.build.outputs.ext }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: build
+        name: Build and push
+        env:
+          TAG: candidate-${{ github.sha }}
+        run: |
+          docker buildx bake --push --set '*.platform=linux/amd64,linux/arm64' --metadata-file "$RUNNER_TEMP/meta.json"
+          for target in base ext; do
+            echo "$target=$IMAGE@$(jq -r --arg t "$target" '.[$t]["containerimage.digest"]' "$RUNNER_TEMP/meta.json")" >> "$GITHUB_OUTPUT"
+          done
+
+  test:
+    needs: candidate
+    name: test candidate (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: base
+            output: base
+          - variant: ext
+            output: ext
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull the candidate
+        env:
+          REF: ${{ needs.candidate.outputs[matrix.output] }}
+        run: docker pull -q "$REF" && docker tag "$REF" "hippo-candidate:${{ matrix.variant }}"
+
+      - name: Pins = contents
+        run: python3 tests/pins/check.py ${{ matrix.variant }} hippo-candidate:${{ matrix.variant }}
+
+      - name: Smoke test
+        run: tests/smoke/run.sh hippo-candidate:${{ matrix.variant }}
+
+  release:
+    needs: [plan, candidate, test]
+    # Without pending entries there is no candidate to build or test: go straight to publishing.
+    if: >
+      always() && needs.plan.result == 'success' &&
+      (needs.plan.outputs.candidate != 'true' || (needs.candidate.result == 'success' && needs.test.result == 'success'))
+    name: version or publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Record candidates and package diffs
+        if: needs.plan.outputs.candidate == 'true'
+        env:
+          BASE_REF: ${{ needs.candidate.outputs.base }}
+          EXT_REF: ${{ needs.candidate.outputs.ext }}
+        run: |
+          dir="$RUNNER_TEMP/hippo"
+          mkdir -p "$dir/candidates" "$dir/diffs"
+          # The PostgreSQL major is the default tag of the build definition.
+          pg=$(docker buildx bake --print base | jq -r '.target.base.tags[0]' | sed 's/.*://')
+          for line in hippo hippo-ext; do
+            if [ "$line" = hippo ]; then ref=$BASE_REF; else ref=$EXT_REF; fi
+            printf 'source=%s\npg=%s\nimage=%s\n' "$GITHUB_SHA" "$pg" "$ref" > "$dir/candidates/$line"
+            # The last release of the line, if any, is the previous candidate committed on main.
+            if [ -f "releases/$line/CANDIDATE" ]; then
+              previous=$(sed -n 's/^image=//p' "releases/$line/CANDIDATE")
+              docker run --rm "$previous" hippo-manifest > "$dir/previous"
+              docker run --rm "$ref" hippo-manifest > "$dir/candidate"
+              node scripts/package-diff.mts "$dir/previous" "$dir/candidate" > "$dir/diffs/$line.md"
+            fi
+          done
+          echo "HIPPO_CANDIDATES=$dir/candidates" >> "$GITHUB_ENV"
+          echo "HIPPO_PACKAGE_DIFFS=$dir/diffs" >> "$GITHUB_ENV"
+
+      - name: Version or publish
+        run: pnpm tegami ci
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -9,11 +9,13 @@ import { mkdir, writeFile } from "node:fs/promises";
  *
  * The entry is a pure function of the pull request (its title, branch and diff), so re-running this after
  * Renovate rebases or retargets the branch rewrites the same file with up-to-date content.
- * Every dependency update is a patch release, lock file maintenance included (it changes what ships);
- * a reviewer can raise the bump in the entry file.
+ * Only pull requests that change shipped content (images/, deploy/, docker-bake.hcl) get one, like any other pull request.
+ * The entry targets the release line the change belongs to: `hippo-ext` when only images/ext/ changed,
+ * `hippo` otherwise (hippo-ext follows hippo). Every dependency update is a patch release, lock file
+ * maintenance included; a reviewer can raise the bump in the entry file.
  * Expects `PR_TITLE`, `PR_BRANCH` and `PR_BASE` (base commit) in the environment.
  */
-const LINE = "hippo";
+const SHIPPED = ["images", "deploy", "docker-bake.hcl"];
 const EXTENSIONS = "images/ext/extensions.yaml";
 
 const title = process.env.PR_TITLE?.trim() ?? "";
@@ -27,8 +29,18 @@ if (!subject) {
   process.exit(0);
 }
 
+if (!base) throw new Error("PR_BASE is required.");
+const shipped = execFileSync("git", ["diff", "--name-only", base, "HEAD", "--", ...SHIPPED], { encoding: "utf8" })
+  .split("\n")
+  .filter(Boolean);
+if (shipped.length === 0) {
+  console.log("No shipped content changed, no entry needed.");
+  process.exit(0);
+}
+const line = shipped.every((file) => file.startsWith("images/ext/")) ? "hippo-ext" : "hippo";
+
 const slug = branch.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "");
-if (!slug || !base) throw new Error("PR_BRANCH and PR_BASE are required.");
+if (!slug) throw new Error("PR_BRANCH is required.");
 
 interface Extension {
   name: string;
@@ -82,7 +94,7 @@ const bullets = [...after]
 
 const heading = subject.charAt(0).toUpperCase() + subject.slice(1);
 const body = bullets.length > 0 ? `\n${bullets.join("\n")}\n` : "";
-const content = `---\npackages:\n  ${LINE}: patch\n---\n\n### ${heading}\n${body}`;
+const content = `---\npackages:\n  ${line}: patch\n---\n\n### ${heading}\n${body}`;
 
 await mkdir(".tegami", { recursive: true });
 await writeFile(`.tegami/${slug}.md`, content);

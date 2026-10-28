@@ -92,6 +92,11 @@
       "automerge": true
     },
     {
+      "description": "Tegami is young and the release plugins use its barely documented plugin API: always reviewed.",
+      "matchPackageNames": ["tegami"],
+      "automerge": false
+    },
+    {
       "description": "Extensions that may need ALTER EXTENSION … UPDATE: separate PR, reviewed by hand until the image can run the update itself.",
       "matchDepTypes": ["alter"],
       "groupName": "PGDG extensions (needs ALTER EXTENSION)",

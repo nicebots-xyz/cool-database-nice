@@ -1,6 +1,6 @@
 name: Changelog
 
-# Change = entry: a pull request that changes shipped content (images/, deploy/) must add a
+# Change = entry: a pull request that changes shipped content (images/, deploy/, docker-bake.hcl) must add a
 # changelog entry in .tegami/ (or amend a pending one). Renovate pull requests get theirs from the Tegami Renovate workflow.
 
 on:
@@ -24,7 +24,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          shipped=$(git diff --name-only "$BASE...$HEAD" -- images deploy)
+          shipped=$(git diff --name-only "$BASE...$HEAD" -- images deploy docker-bake.hcl)
           if [ -z "$shipped" ]; then
             echo "No shipped content changed, no entry needed."
             exit 0
