@@ -1,0 +1,90 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>nicebots-xyz/renovate-config",
+    "local>nicebots-xyz/renovate-config:automerge-python-lockfile"
+  ],
+  "platformAutomerge": false,
+  "pip-compile": {
+    "managerFilePatterns": ["/^images/base/requirements\\.lock$/"]
+  },
+  "docker-compose": {
+    "managerFilePatterns": ["/^deploy/stack\\.yml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "PGDG extension packages in images/ext/extensions.yaml. The fixed field order package → version → upgrade is part of the file's contract.",
+      "managerFilePatterns": ["/^images/ext/extensions\\.yaml$/"],
+      "matchStrings": [
+        "package: (?<depName>\\S+)\\n\\s+version: (?<currentValue>\\S+)\\n\\s+upgrade: (?<depType>\\S+)"
+      ],
+      "datasourceTemplate": "deb",
+      "registryUrlTemplate": "https://apt.postgresql.org/pub/repos/apt?suite=trixie-pgdg&components=main&binaryArch=amd64"
+    },
+    {
+      "customType": "regex",
+      "description": "etcd in the reference stack, tracked through GitHub releases: its registries (quay.io, gcr.io) give no release timestamps, so a cooldown could never be met there.",
+      "managerFilePatterns": ["/^deploy/stack\\.yml$/"],
+      "matchStrings": ["image: quay\\.io/coreos/etcd:(?<currentValue>v\\S+)"],
+      "depNameTemplate": "etcd-io/etcd",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Cooldown wherever the source gives release timestamps.",
+      "matchDatasources": ["docker", "github-releases", "github-tags"],
+      "minimumReleaseAge": "5 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "Same cooldown as the lock file (uv --exclude-newer P7D), so Renovate never proposes a release uv refuses to lock.",
+      "matchDatasources": ["pypi"],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "PostgreSQL majors are separate image lines and need pg_upgrade: never proposed.",
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "The reference stack pins third-party images by tag; release assets get digests when they are rendered.",
+      "matchFileNames": ["deploy/stack.yml"],
+      "pinDigests": false
+    },
+    {
+      "description": "etcd is tracked by the custom manager above, not by its image.",
+      "matchManagers": ["docker-compose"],
+      "matchPackageNames": ["quay.io/coreos/etcd"],
+      "enabled": false
+    },
+    {
+      "description": "PGDG publishes no release timestamps: a weekly grouped PR is the cooldown.",
+      "matchDatasources": ["deb"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "groupName": "PGDG extensions",
+      "schedule": ["before 6am on monday"],
+      "addLabels": ["deps:pgdg"]
+    },
+    {
+      "description": "Low-risk updates merge themselves once every check is green.",
+      "matchUpdateTypes": ["patch", "digest", "pinDigest"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor"],
+      "automerge": true
+    },
+    {
+      "description": "Extensions that may need ALTER EXTENSION … UPDATE: separate PR, reviewed by hand until the image can run the update itself.",
+      "matchDepTypes": ["alter"],
+      "groupName": "PGDG extensions (needs ALTER EXTENSION)",
+      "automerge": false,
+      "addLabels": ["needs-alter-extension"]
+    }
+  ]
+}
