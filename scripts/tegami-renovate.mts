@@ -20,7 +20,7 @@ const EXTENSIONS = "images/ext/extensions.yaml";
 
 const title = process.env.PR_TITLE?.trim() ?? "";
 const branch = process.env.PR_BRANCH?.trim() ?? "";
-const base = process.env.PR_BASE?.trim() ?? "";
+const prBase = process.env.PR_BASE?.trim() ?? "";
 
 // Renovate titles its pull requests `<type>(deps): <subject>`.
 const subject = /^\w+\(deps[\w-]*\)!?: (.+)$/.exec(title)?.[1];
@@ -29,7 +29,10 @@ if (!subject) {
   process.exit(0);
 }
 
-if (!base) throw new Error("PR_BASE is required.");
+if (!prBase) throw new Error("PR_BASE is required.");
+// Compare with the merge base, not the base branch's tip: once main moves past the branch, the tip's own
+// changes would show up as reverted by the pull request.
+const base = execFileSync("git", ["merge-base", prBase, "HEAD"], { encoding: "utf8" }).trim();
 const shipped = execFileSync("git", ["diff", "--name-only", base, "HEAD", "--", ...SHIPPED], { encoding: "utf8" })
   .split("\n")
   .filter(Boolean);
