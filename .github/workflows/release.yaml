@@ -1,12 +1,15 @@
 name: Release
 
-# Runs on every push to main, one run at a time:
-# - With pending changelog entries: builds candidate images from HEAD (GHCR, candidate-<sha>[-ext]), tests the
-#   exact pushed images (pins, attached SBOM, smoke test), then Tegami opens or refreshes the Version
-#   Packages pull request, which records
-#   their digests in releases/<line>/CANDIDATE and the package diff in the changelog.
-# - Without (e.g. the Version Packages pull request was merged): Tegami publishes. Each bumped line's
+# Runs on every push to main:
+# - With pending changelog entries: waits 15 minutes, so that only the last push of a burst builds. Then it builds
+#   candidate images from HEAD (GHCR, candidate-<sha>[-ext]), tests the exact pushed images (pins, attached SBOM,
+#   smoke test), and Tegami opens or refreshes the Version Packages pull request, which records their digests in
+#   releases/<line>/CANDIDATE and the package diff in the changelog.
+# - Without (e.g. the Version Packages pull request was merged): Tegami publishes right away. Each bumped line's
 #   candidate digest is promoted to its release tags, then the git tag and the GitHub release are created.
+#
+# Only the wait is ever cancelled. A run that got past it is never stopped halfway through pushing to GHCR or
+# GitHub; a newer run can only replace one still queued behind it, before it started.
 
 on:
   push:
@@ -14,10 +17,6 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/nicebots-xyz/hippo
@@ -35,9 +34,20 @@ jobs:
         run: |
           if ls .tegami/*.md >/dev/null 2>&1; then echo candidate=true; else echo candidate=false; fi >> "$GITHUB_OUTPUT"
 
-  candidate:
+  debounce:
     needs: plan
     if: needs.plan.outputs.candidate == 'true'
+    name: wait for more pushes
+    runs-on: ubuntu-latest
+    # A newer push cancels this wait, and with it the rest of this run.
+    concurrency:
+      group: release-debounce
+      cancel-in-progress: true
+    steps:
+      - run: sleep 900
+
+  candidate:
+    needs: debounce
     name: build candidate
     runs-on: ubuntu-latest
     permissions:
@@ -126,6 +136,10 @@ jobs:
       (needs.plan.outputs.candidate != 'true' || (needs.candidate.result == 'success' && needs.test.result == 'success'))
     name: version or publish
     runs-on: ubuntu-latest
+    # One versioning and one publishing at a time, apart, so a queued version run never replaces a queued publish.
+    concurrency:
+      group: release-${{ needs.plan.outputs.candidate == 'true' && 'version' || 'publish' }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write
@@ -177,6 +191,13 @@ jobs:
           echo "HIPPO_PACKAGE_DIFFS=$dir/diffs" >> "$GITHUB_ENV"
 
       - name: Version or publish
-        run: pnpm tegami ci
+        run: |
+          # A newer push regenerates the Version Packages pull request from a newer tree: an older run (e.g. one
+          # re-run by hand) must not overwrite it.
+          if [ "${{ needs.plan.outputs.candidate }}" = true ] && [ "$(git ls-remote origin refs/heads/main | cut -f1)" != "$GITHUB_SHA" ]; then
+            echo "main moved past $GITHUB_SHA: the newer run versions."
+            exit 0
+          fi
+          pnpm tegami ci
         env:
           GITHUB_TOKEN: ${{ github.token }}
