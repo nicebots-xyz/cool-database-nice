@@ -3,10 +3,9 @@ name: CI
 # Builds every variant, checks it against its pins and runs the Swarm smoke test on it.
 # arm64 is built under QEMU to catch platform breakage, but only amd64 is smoke-tested.
 
+# Pushes to main are covered by the Release workflow, which tests the candidate images it builds.
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +22,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [base, ext]
+        include:
+          - variant: base
+            image: hippo-dev/hippo:18
+          - variant: ext
+            image: hippo-dev/hippo:18-ext
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -33,10 +36,10 @@ jobs:
         run: docker buildx bake --load ${{ matrix.variant }}
 
       - name: Pins = contents
-        run: python3 tests/pins/check.py ${{ matrix.variant }} hippo-dev/${{ matrix.variant }}:18
+        run: python3 tests/pins/check.py ${{ matrix.variant }} ${{ matrix.image }}
 
       - name: Smoke test
-        run: tests/smoke/run.sh hippo-dev/${{ matrix.variant }}:18
+        run: tests/smoke/run.sh ${{ matrix.image }}
 
   arm64:
     name: build (arm64)

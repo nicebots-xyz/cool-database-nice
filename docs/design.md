@@ -126,10 +126,10 @@ deploy/
 tests/
   pins/                   pins = contents check
   smoke/                  3-node Swarm smoke test, grown out of lab/
-releases/hippo/
+releases/<line>/          one per release line: hippo (base image), hippo-ext (ext image)
   VERSION                 current release version (semver, ours)
   CHANGELOG.md            release notes, written by Tegami
-  CANDIDATE               source commit + digests of the images the pending release ships
+  CANDIDATE               source commit + digest of the image the pending release ships
 .tegami/                  pending changelog entries (Tegami's location)
 scripts/                  Tegami config + plugins, release scripts (as in botkit)
 docs/                     design + user docs
@@ -142,9 +142,9 @@ Layout rules:
 
 - **One image = one folder under `images/`**, containing its Dockerfile and every pin that
   feeds it; the folder is the build context. Adding a variant means adding a folder.
-- **Shipped content is exactly `images/` and `deploy/`.** The images are a function of
-  `images/` alone; the release's stack asset is rendered from `deploy/`. Everything else is
-  tooling, tests or documentation.
+- **Shipped content is exactly `images/`, `deploy/` and `docker-bake.hcl`.** The images are a
+  function of `images/` and the build definition; the release's stack asset is rendered from
+  `deploy/`. Everything else is tooling, tests or documentation.
 
 ## Dependency updates
 
@@ -165,52 +165,73 @@ Layout rules:
 
 ## Release pipeline
 
-Releases are managed by [Tegami](https://github.com/fuma-nama/tegami) with a single
-release line, `hippo`, backed by `releases/hippo/VERSION`. Variants are a build-matrix
-concern, not separate release lines: every hippo version ships both variants.
+Releases are managed by [Tegami](https://github.com/fuma-nama/tegami) (`scripts/tegami*.mts`) with two
+release lines, one per image, so an extension-only change does not release the base image:
 
-**Versioning** is our own semver, independent of the PostgreSQL version:
+| Line | Ships | Built from | Versioned by |
+|---|---|---|---|
+| `hippo` | base image | `images/base/`, `deploy/`, `docker-bake.hcl` | `releases/hippo/VERSION` |
+| `hippo-ext` | ext image | `images/`, `deploy/`, `docker-bake.hcl` (ext is built on base) | `releases/hippo-ext/VERSION` |
+
+**A base release always releases ext too** (Tegami draft policy): same bump type, and ext's changelog
+includes the base entries. An entry for `hippo-ext` alone releases only ext.
+
+**Versioning** is our own semver per line, independent of the PostgreSQL version:
 
 - **major**: breaking change to the stack / config contract
 - **minor**: new extension or feature, Patroni minor
 - **patch**: dependency bumps, including PG 18.x minors
 
-**Tags** per release, e.g. `1.4.2`:
+**Tags**, e.g. `hippo@1.4.2` and `hippo-ext@1.5.0`:
 
-| Tag | Moves? | Variant |
+| Tag | Moves? | Line |
 |---|---|---|
-| `18-1.4.2` / `18-1.4.2-ext` | no (immutable) | base / ext |
-| `18` / `18-ext` | yes | base / ext |
+| `18-1.4.2` / `18-ext-1.5.0` | no (immutable) | hippo / hippo-ext |
+| `18` / `18-ext` | yes | hippo / hippo-ext |
 | `candidate-<sha>` / `candidate-<sha>-ext` | no, GHCR only, pruned | pending release |
 
-Docker Hub only ever receives released images; candidates stay on GHCR.
+All tags live on `ghcr.io/nicebots-xyz/hippo`. Docker Hub (releases only) is on hold until its namespace is
+settled.
+
+**Changelogs** (`releases/<line>/CHANGELOG.md`, GitHub releases) use Tegami's default layout, with every entry
+linked to its pull request: merges are squash-only, so the commit that added an entry file is its pull
+request's squash commit, `… (#N)`.
 
 ### Flow
 
 ```
 push to main
   └ release workflow (serialized: one run at a time, never cancelled)
-     1. build base from HEAD → push candidate-<sha>
-        build ext FROM that base digest → push candidate-<sha>-ext
-     2. verify + smoke-test the candidates (see invariants)
-     3. tegami version → open / regenerate the Version PR containing:
-          VERSION       bumped
-          CHANGELOG.md  the PRs' .tegami entries + the derived package diff
-          CANDIDATE     source commit + both candidate digests
-
-merge the Version PR (manual for now)
-  └ release workflow → tegami publish
-     1. check the candidate still matches the tree being released
-     2. promote: copy the candidate digests to the release tags on GHCR + Docker Hub
-     3. check every published tag resolves to the CANDIDATE digests
-     4. git tag hippo@<version> + GitHub release (only now, so it never points at nothing)
-        release assets: rendered stack.yml with the release digests, package manifest
+     with pending .tegami entries:
+       1. build base and ext from HEAD (one bake build, amd64 + arm64) → push candidate-<sha>[-ext]
+       2. test the pushed images: pins = contents, Swarm smoke test
+       3. tegami version → open / regenerate the Version PR; for each bumped line:
+            VERSION       bumped
+            CHANGELOG.md  the PRs' .tegami entries + the package diff against the line's last release
+            CANDIDATE     source commit, PostgreSQL major, candidate digest
+     without (the Version PR was merged):
+       tegami publish, per bumped line:
+       1. candidate = tree: the line's inputs are unchanged since CANDIDATE's source commit
+       2. promote: point the release tags at the candidate digest (no rebuild)
+       3. published = candidate: every release tag resolves to that digest
+       4. git tag <line>@<version> + GitHub release, only once the images are published
 ```
 
-The candidate is built in the push-to-main run rather than in the Version PR's own CI
-because PRs created with `GITHUB_TOKEN` do not trigger workflows. It also needs no
-special token: the run that writes the Version PR has already built and tested what it
-describes.
+Versioning refuses to run without candidates, so a Version PR always describes tested images. A failed
+promotion leaves no tag and no release behind, and re-running a publish is a no-op once the tags point at
+the candidate.
+
+The candidate is built in the push-to-main run rather than in the Version PR's own CI because PRs created
+with `GITHUB_TOKEN` do not trigger workflows: the run that writes the Version PR has already built and
+tested what it describes.
+
+`releases/<line>/CANDIDATE` (`key=value` lines):
+
+```
+source=<commit the image was built from>
+pg=18
+image=ghcr.io/nicebots-xyz/hippo@sha256:…
+```
 
 ## Drift: design rules
 
@@ -238,8 +259,8 @@ is structured, not because of special-case checks. The rules:
 5. **Only one generated commit per release: the Version PR merge.** Releasing never commits
    back to `main`. Rendered artifacts (stack file with digests, manifests) are release
    assets, not files in the repo. Nothing can loop.
-6. **Nothing version-specific inside the image.** The image is a function of `images/`
-   only, so `VERSION` / `CHANGELOG.md` / `CANDIDATE` changes never change a digest.
+6. **Nothing version-specific inside the image.** The image is a function of `images/` and
+   `docker-bake.hcl` only, so `VERSION` / `CHANGELOG.md` / `CANDIDATE` changes never change a digest.
 
 ### Invariants (the only checks)
 
@@ -248,9 +269,9 @@ next push regenerates everything.
 
 | Check | When | Asserts |
 |---|---|---|
-| **Change = entry** | every PR | a PR touching shipped content (`images/`, `deploy/`) contains a `.tegami/` entry |
+| **Change = entry** | every PR | a PR touching shipped content (`images/`, `deploy/`, `docker-bake.hcl`) contains a `.tegami/` entry |
 | **Pins = contents** | every build | the packages installed in the image (`dpkg-query`, `pip freeze`) match the pin files exactly |
-| **Candidate = tree** | before promotion | `git diff --quiet <CANDIDATE.source> HEAD -- images/ deploy/`: the shipped content being released is what the candidate was built from |
+| **Candidate = tree** | before promotion | `git diff --quiet <CANDIDATE.source> HEAD -- <the line's inputs>`: the shipped content being released is what the candidate was built from |
 | **Published = candidate** | after promotion | every release tag on both registries resolves to the `CANDIDATE` digests |
 
 The "candidate = tree" check also covers the race where `main` moves while a Version PR is
@@ -260,7 +281,8 @@ instead of shipping the wrong image.
 ### Changelog entries for Renovate PRs
 
 Renovate PRs get their entry the same way as in botkit: a workflow on the PR writes
-`.tegami/<branch-slug>.md` from the PR's title (and the `upstream` link from
+`.tegami/<branch-slug>.md` from the PR's title, for the line its files belong to (`hippo-ext` when only
+`images/ext/` changed, `hippo` otherwise; none when no shipped content changed) (and the `upstream` link from
 `images/ext/extensions.yaml` for extension bumps), and the `fixer` GitHub App pushes it to the PR
 branch. This keeps working without special cases because:
 
@@ -302,3 +324,4 @@ The "change = entry" invariant applies to every PR, human or bot alike.
 11. Retention policy for `candidate-*` tags on GHCR.
 12. Documentation site: build `docs/` with [Zensical](https://zensical.org) later. For now
     the docs are plain Markdown in the repo.
+13. Release assets: the rendered stack file with release digests, and the package manifest.
