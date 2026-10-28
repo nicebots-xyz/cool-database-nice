@@ -5,6 +5,18 @@
     "local>nicebots-xyz/renovate-config:automerge-python-lockfile"
   ],
   "platformAutomerge": false,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__fixtures__/**",
+    "lab/**"
+  ],
+  "ignoreDeps": ["hippo-base"],
   "pip-compile": {
     "managerFilePatterns": ["/^images/base/requirements\\.lock$/"]
   },
