@@ -2,17 +2,24 @@
 
 usage: python3 tests/pins/check.py <base|ext> <image>
 
-- base: the Python packages in the Patroni venv are exactly the ones in images/base/requirements.lock.
+- base: the Python packages in the Patroni venv are exactly the ones in images/base/requirements.lock
+        that apply to the image (environment markers are evaluated by the image's own Python).
 - ext:  the same, plus every package in images/ext/extensions.yaml is installed at its pinned version.
 """
 
+import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LOCK_LINE = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;\\]+)")
+LOCK_LINE = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;\\]+)(?:\s*;\s*([^\\]+?))?\s*\\?$")
+# Evaluates environment markers in the image, with the packaging library pip vendors.
+EVALUATE_MARKERS = (
+    "import json, sys; from pip._vendor.packaging.markers import Marker; "
+    "print(json.dumps([Marker(m).evaluate() for m in json.loads(sys.argv[1])]))"
+)
 # Installed by the venv itself, not by the lock.
 VENV_BOOTSTRAP = {"pip"}
 
@@ -30,11 +37,23 @@ def manifest(image: str) -> dict[str, dict[str, str]]:
     return kinds
 
 
-def lock_pins() -> dict[str, str]:
-    pins = {}
+def lock_pins(image: str) -> dict[str, str]:
+    """The lock's pins that apply to the image's environment."""
+    pins, markers = {}, {}
     for line in (ROOT / "images/base/requirements.lock").read_text().splitlines():
         if match := LOCK_LINE.match(line):
-            pins[normalize(match[1])] = match[2]
+            name = normalize(match[1])
+            pins[name] = match[2]
+            if match[3]:
+                markers[name] = match[3]
+    if markers:
+        out = subprocess.run(
+            ["docker", "run", "--rm", image, "/opt/patroni/bin/python", "-c", EVALUATE_MARKERS, json.dumps(list(markers.values()))],
+            check=True, capture_output=True, text=True,
+        ).stdout
+        for name, applies in zip(markers, json.loads(out)):
+            if not applies:
+                del pins[name]
     return pins
 
 
@@ -67,7 +86,7 @@ def main() -> int:
         sys.exit("variant must be base or ext")
     contents = manifest(image)
     pip = {name: version for name, version in contents["pip"].items() if name not in VENV_BOOTSTRAP}
-    errors = compare("pip", lock_pins(), pip, exact=True)
+    errors = compare("pip", lock_pins(image), pip, exact=True)
     if variant == "ext":
         pins = extension_pins()
         if not pins:
