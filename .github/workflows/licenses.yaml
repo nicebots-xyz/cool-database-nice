@@ -22,4 +22,4 @@ jobs:
           version: v0.1.1
 
       - name: Check license headers
-        run: licensor check * --ignore ".*"
+        run: licensor check --ignore ".*" -- *
