@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 # The base comes from the `hippo-base` named build context (see docker-bake.hcl), so ext is always
 # exactly the base of the same build plus extensions. BASE can also point at a base image by digest.
 ARG BASE=hippo-base
