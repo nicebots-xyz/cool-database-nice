@@ -3,7 +3,9 @@
 # forces a rolling update of every Postgres member under write load, and checks that:
 #   - the templated member hostnames resolve,
 #   - the cluster converges back to 1 leader + 2 streaming replicas,
-#   - every write acknowledged to the client (libpq multi-host and HAProxy) is in the table, once.
+#   - every write acknowledged to the client (libpq multi-host and HAProxy) is in the table, once,
+#     and the table holds nothing that was not attempted. A write whose attempt failed may or may not
+#     have committed (the connection can drop after the commit, before the acknowledgement).
 # usage: run.sh <hippo-image>     KEEP=1 leaves the swarm running afterwards.
 set -eu
 IMAGE=${1:?usage: run.sh <hippo-image>}
@@ -83,16 +85,30 @@ log "cluster converged after rolling update"
 svc smoke_writer touch /tmp/stop
 wait_for 30 "the writer totals" sh -c 'docker exec hippo-lab1 docker service logs --raw smoke_writer 2>/dev/null | grep -q TOTAL'
 TOTAL=$(node docker service logs --raw smoke_writer 2>/dev/null | grep TOTAL | head -1)
-ROWS=$(svc hippo_pg psql -h /var/run/postgresql -U postgres -Atc \
-  "select string_agg(path || '=' || count || '/' || uniq, ' ' order by path) from (select path, count(*), count(distinct n) uniq from smoke group by path) s")
 HISTORY=$(svc hippo_pg patronictl -c /etc/patroni.yml history -f json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
-log "writer: $TOTAL"
-log "table:  $ROWS (rows/distinct per path); failovers: $HISTORY"
+log "writer: $TOTAL; failovers: $HISTORY"
 
 for p in direct haproxy; do
-  ok=$(echo "$TOTAL" | sed -n "s/.*${p}_ok=\([0-9]*\).*/\1/p")
-  rows=$(echo "$ROWS" | sed -n "s/.*${p}=\([0-9]*\)\/\([0-9]*\).*/\1 \2/p")
-  [ "$rows" = "$ok $ok" ] || fail "$p: $ok acknowledged writes, table has rows/distinct = $rows"
-  [ "$ok" -gt 0 ] || fail "$p: no successful writes"
+  acked=$(svc smoke_writer sh -c "cat /tmp/acked-$p 2>/dev/null" | tr '\n' ' ')
+  failed=$(svc smoke_writer sh -c "cat /tmp/failed-$p 2>/dev/null" | tr '\n' ' ')
+  rows=$(svc hippo_pg psql -h /var/run/postgresql -U postgres -Atc "select n from smoke where path = '$p'" | tr '\n' ' ')
+  verdict=$(python3 - "$acked" "$failed" "$rows" <<'PY'
+import sys
+acked, failed, rows = (s.split() for s in sys.argv[1:4])
+problems = []
+if len(rows) != len(set(rows)):
+    problems.append(f"{len(rows) - len(set(rows))} duplicated rows")
+if lost := set(acked) - set(rows):
+    problems.append(f"{len(lost)} acknowledged writes missing")
+if invented := set(rows) - set(acked) - set(failed):
+    problems.append(f"{len(invented)} rows never written")
+if not acked:
+    problems.append("no successful writes")
+ambiguous = len(set(failed) & set(rows))
+print("; ".join(problems) or f"ok: {len(acked)} acknowledged, all present; {ambiguous} failed attempts had committed")
+PY
+)
+  log "$p: $verdict"
+  case $verdict in ok:*) ;; *) fail "$p: $verdict" ;; esac
 done
-log "PASS: every acknowledged write is present exactly once"
+log "PASS: no acknowledged write lost, no duplicates, nothing invented"
