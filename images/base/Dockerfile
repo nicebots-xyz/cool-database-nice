@@ -16,10 +16,10 @@ RUN apt-get update \
 # Image tooling, and the declarations of everything no package manager owns: they become an SBOM fragment
 # that the image's SBOM scanner merges (hippo/components.yaml).
 COPY --chmod=0755 hippo/hippo-manifest /usr/local/bin/hippo-manifest
-COPY --chmod=0755 hippo/sbom-fragment /usr/local/lib/hippo/sbom-fragment
+COPY hippo/sbom-fragment.py /usr/local/lib/hippo/sbom-fragment.py
 COPY hippo/components.yaml /usr/local/lib/hippo/components/base.yaml
 RUN mkdir -p /usr/share/hippo/sbom \
- && /usr/local/lib/hippo/sbom-fragment /usr/local/lib/hippo/components/base.yaml base > /usr/share/hippo/sbom/base.spdx.json \
+ && /opt/patroni/bin/python /usr/local/lib/hippo/sbom-fragment.py /usr/local/lib/hippo/components/base.yaml base > /usr/share/hippo/sbom/base.spdx.json \
  && rm -rf /root/.cache /root/.wget-hsts
 
 ENV PATH=/opt/patroni/bin:$PATH

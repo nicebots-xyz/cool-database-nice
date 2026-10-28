@@ -1,4 +1,3 @@
-#!/opt/patroni/bin/python
 # SPDX-License-Identifier: MIT
 # Copyright: 2026 NiceBots.xyz
 """Prints an SPDX document for the components declared in a components file (see components.yaml).
@@ -6,7 +5,7 @@
 Baked into the image under /usr/share/hippo/sbom/, where the SBOM scanner merges it, so the image's SBOM also
 lists the software that no package manager owns, with its license.
 
-usage: sbom-fragment <components.yaml> <name>
+usage: python sbom-fragment.py <components.yaml> <name>
 """
 
 import json
