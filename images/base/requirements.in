@@ -1,1 +1,4 @@
-patroni[etcd3,psycopg3]==4.1.5
+# Plain psycopg uses the system libpq (Debian's libpq5) instead of the psycopg-binary wheel, which
+# vendors its own libpq, OpenSSL, Kerberos, … built elsewhere and without license metadata.
+patroni[etcd3]==4.1.5
+psycopg==3.3.6
