@@ -268,13 +268,14 @@ is structured, not because of special-case checks. The rules:
 
 ### Invariants (the only checks)
 
-Four general checks, each enforcing one rule above. Any failure stops the run, and the
+Five general checks, each enforcing one rule above. Any failure stops the run, and the
 next push regenerates everything.
 
 | Check | When | Asserts |
 |---|---|---|
 | **Change = entry** | every PR | a PR touching shipped content (`images/`, `deploy/`, `docker-bake.hcl`) contains a `.tegami/` entry |
 | **Pins = contents** | every build | the packages installed in the image (`dpkg-query`, `pip freeze`) match the pin files exactly |
+| **SBOM = contents** | every build, and the SBOM attached to each candidate | every file is owned by a deb/pip package or declared in `components.yaml`; every package and component is in the SBOM, with a license (see [licenses](licenses.md)) |
 | **Candidate = tree** | before promotion | `git diff --quiet <CANDIDATE.source> HEAD -- <the line's inputs>`: the shipped content being released is what the candidate was built from |
 | **Published = candidate** | after promotion | every release tag on both registries resolves to the `CANDIDATE` digests |
 

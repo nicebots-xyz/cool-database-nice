@@ -2,7 +2,8 @@ name: Release
 
 # Runs on every push to main, one run at a time:
 # - With pending changelog entries: builds candidate images from HEAD (GHCR, candidate-<sha>[-ext]), tests the
-#   exact pushed images, then Tegami opens or refreshes the Version Packages pull request, which records
+#   exact pushed images (pins, attached SBOM, smoke test), then Tegami opens or refreshes the Version
+#   Packages pull request, which records
 #   their digests in releases/<line>/CANDIDATE and the package diff in the changelog.
 # - Without (e.g. the Version Packages pull request was merged): Tegami publishes. Each bumped line's
 #   candidate digest is promoted to its release tags, then the git tag and the GitHub release are created.
@@ -65,7 +66,10 @@ jobs:
         env:
           TAG: candidate-${{ github.sha }}
         run: |
-          docker buildx bake --push --set '*.platform=linux/amd64,linux/arm64' --metadata-file "$RUNNER_TEMP/meta.json"
+          # The SBOM and provenance attestations are part of the image index, so promotion (which points the
+          # release tags at this exact digest) publishes them as tested.
+          docker buildx bake --push --sbom=true --provenance=mode=max \
+            --set '*.platform=linux/amd64,linux/arm64' --metadata-file "$RUNNER_TEMP/meta.json"
           for target in base ext; do
             echo "$target=$IMAGE@$(jq -r --arg t "$target" '.[$t]["containerimage.digest"]' "$RUNNER_TEMP/meta.json")" >> "$GITHUB_OUTPUT"
           done
@@ -94,6 +98,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Pull the candidate
         env:
           REF: ${{ needs.candidate.outputs[matrix.output] }}
@@ -101,6 +107,13 @@ jobs:
 
       - name: Pins = contents
         run: python3 tests/pins/check.py ${{ matrix.variant }} hippo-candidate:${{ matrix.variant }}
+
+      - name: SBOM = contents (the SBOM attached to the candidate)
+        env:
+          REF: ${{ needs.candidate.outputs[matrix.output] }}
+        run: |
+          docker buildx imagetools inspect "$REF" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
+          python3 tests/sbom/check.py "hippo-candidate:${{ matrix.variant }}" "$RUNNER_TEMP/sbom.json"
 
       - name: Smoke test
         run: tests/smoke/run.sh hippo-candidate:${{ matrix.variant }}
