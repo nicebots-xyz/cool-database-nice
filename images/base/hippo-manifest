@@ -1,0 +1,9 @@
+#!/bin/sh
+# Prints every package in the image, one "<kind> <name> <version>" per line, sorted.
+# Used to check the image against its pins and to diff releases.
+set -eu
+{
+  dpkg-query -W -f='deb ${Package} ${Version}\n'
+  /opt/patroni/bin/pip list --format=freeze 2>/dev/null \
+    | tr 'A-Z_' 'a-z-' | sed 's/==/ /; s/^/pip /'
+} | LC_ALL=C sort

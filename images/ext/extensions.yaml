@@ -1,0 +1,48 @@
+# Extensions installed in the ext variant, pinned to exact PGDG package versions.
+#
+# Keep the field order package → version → upgrade → upstream: Renovate's regex manager relies on it.
+# upgrade: plain = binary-only bump, safe to roll out as is.
+#          alter = may need `ALTER EXTENSION … UPDATE` once every member runs it (manual review).
+# Every extension starts as `alter` until it is known to be safe otherwise.
+
+pgvector:
+  package: postgresql-18-pgvector
+  version: 0.8.7-1.pgdg13+1
+  upgrade: alter
+  upstream: https://github.com/pgvector/pgvector
+
+pg_cron:
+  package: postgresql-18-cron
+  version: 1.6.8-1.pgdg13+2
+  upgrade: alter
+  upstream: https://github.com/citusdata/pg_cron
+
+pg_partman:
+  package: postgresql-18-partman
+  version: 5.5.0-1.pgdg13+1
+  upgrade: alter
+  upstream: https://github.com/pgpartman/pg_partman
+
+pgaudit:
+  package: postgresql-18-pgaudit
+  version: 18.0-3.pgdg13+1
+  upgrade: alter
+  upstream: https://github.com/pgaudit/pgaudit
+
+pg_repack:
+  package: postgresql-18-repack
+  version: 1.5.3-1.pgdg13+2
+  upgrade: alter
+  upstream: https://github.com/reorg/pg_repack
+
+hypopg:
+  package: postgresql-18-hypopg
+  version: 1.4.4-1.pgdg13+1
+  upgrade: alter
+  upstream: https://github.com/HypoPG/hypopg
+
+pg_stat_kcache:
+  package: postgresql-18-pg-stat-kcache
+  version: 2.3.2-1.pgdg13+2
+  upgrade: alter
+  upstream: https://github.com/powa-team/pg_stat_kcache
