@@ -48,6 +48,7 @@ Both `pg` and `etcd` are **single replicated services**, not one service per mem
 | Stable data | `volumes: pgdata: name: "pgdata-{{.Task.Slot}}"`, node-local |
 | Slots don't wander | `max_replicas_per_node: 1` + exactly N labelled nodes; a lost node's slot stays Pending |
 | No VIP | `endpoint_mode: dnsrr` |
+| Healthchecks never depend on peers | Swarm publishes a task's DNS names only once it is healthy; a check that needs other members (e.g. etcd quorum) deadlocks bootstrap. etcd has none; Patroni's checks its own Postgres only |
 | Safe rollouts | `update_config: {parallelism: 1, order: stop-first}`, `stop_grace_period: 120s` |
 | Config | Patroni YAML as a `template_driver: golang` Docker config; passwords via `{{ secret "…" }}` |
 

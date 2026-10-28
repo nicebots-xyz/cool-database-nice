@@ -1,0 +1,124 @@
+# hippo reference stack: PostgreSQL 18 + Patroni, etcd and HAProxy on Docker Swarm.
+#
+# Prerequisites:
+#   - exactly 3 nodes labelled hippo.pg=true (docker node update --label-add hippo.pg=true <node>)
+#   - secrets: printf '%s' "$PW" | docker secret create hippo_superuser_password_v1 -
+#              printf '%s' "$PW" | docker secret create hippo_replication_password_v1 -
+# Deploy:
+#   HIPPO_IMAGE=<image@digest> docker stack deploy -c stack.yml hippo
+#
+# Configs and secrets are immutable: to change one, add a new version (patroni_v2, …_v2) and point
+# the service at it. Patroni's dynamic settings (postgresql.parameters, …) live in etcd after
+# bootstrap: change them with `patronictl edit-config`, not in patroni.yml.tmpl.
+
+networks:
+  hippo:
+    name: ${HIPPO_NETWORK:-hippo}
+    driver: overlay
+    attachable: true
+    ipam:
+      config:
+        - subnet: ${HIPPO_SUBNET:-10.77.0.0/24}
+
+secrets:
+  superuser_password:
+    external: true
+    name: ${HIPPO_SUPERUSER_SECRET:-hippo_superuser_password_v1}
+  replication_password:
+    external: true
+    name: ${HIPPO_REPLICATION_SECRET:-hippo_replication_password_v1}
+
+configs:
+  patroni_v1:
+    file: ./patroni.yml.tmpl
+    template_driver: golang
+  haproxy_v1:
+    file: ./haproxy.cfg
+
+volumes:
+  pgdata:
+    name: "pgdata-{{.Task.Slot}}"
+  etcd-data:
+    name: "etcd-data-{{.Task.Slot}}"
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.6.16
+    # The templated hostname is resolvable on the overlay and follows IP changes, so peer URLs
+    # stay valid across restarts without any membership changes.
+    hostname: "etcd-{{.Task.Slot}}"
+    networks: [hippo]
+    environment:
+      ETCD_NAME: "etcd-{{.Task.Slot}}"
+      ETCD_DATA_DIR: /data
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: "http://etcd-{{.Task.Slot}}:2379"
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: "http://etcd-{{.Task.Slot}}:2380"
+      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: hippo
+    volumes:
+      - type: volume
+        source: etcd-data
+        target: /data
+    # No healthcheck on purpose: Swarm only publishes a task's DNS names once it is healthy, and
+    # etcd's only built-in check needs quorum, i.e. resolvable peers, so it could never get healthy.
+    # Swarm still restarts etcd if the process exits.
+    deploy:
+      replicas: 3
+      endpoint_mode: dnsrr
+      placement:
+        constraints: [node.labels.hippo.pg == true]
+        max_replicas_per_node: 1
+      update_config: {parallelism: 1, order: stop-first, delay: 10s, failure_action: pause}
+
+  pg:
+    image: ${HIPPO_IMAGE:?set HIPPO_IMAGE to a hippo image, by digest}
+    hostname: "pg-{{.Task.Slot}}"
+    networks: [hippo]
+    environment:
+      PATRONI_NAME: "pg-{{.Task.Slot}}"
+      PATRONI_RESTAPI_CONNECT_ADDRESS: "pg-{{.Task.Slot}}:8008"
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: "pg-{{.Task.Slot}}:5432"
+      # Read by patroni.yml.tmpl to build pg_hba; must match the network subnet.
+      HIPPO_SUBNET: ${HIPPO_SUBNET:-10.77.0.0/24}
+    secrets:
+      - source: superuser_password
+        target: superuser_password
+      - source: replication_password
+        target: replication_password
+    configs:
+      - source: patroni_v1
+        target: /etc/patroni.yml
+        uid: "999"
+        gid: "999"
+        mode: 0400
+    volumes:
+      - type: volume
+        source: pgdata
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8008/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+    stop_grace_period: 120s
+    deploy:
+      replicas: 3
+      endpoint_mode: dnsrr
+      placement:
+        constraints: [node.labels.hippo.pg == true]
+        max_replicas_per_node: 1
+      update_config: {parallelism: 1, order: stop-first, delay: 10s, failure_action: pause}
+
+  haproxy:
+    image: haproxy:3.2.26-alpine
+    networks: [hippo]
+    configs:
+      - source: haproxy_v1
+        target: /usr/local/etc/haproxy/haproxy.cfg
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, order: start-first}

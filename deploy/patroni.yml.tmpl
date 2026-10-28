@@ -1,0 +1,46 @@
+# Patroni configuration, rendered by Swarm (template_driver: golang) when each task starts.
+# Per-member settings (name, connect addresses) come from PATRONI_* env vars in the stack.
+scope: hippo
+restapi:
+  listen: 0.0.0.0:8008
+etcd3:
+  hosts: etcd-1:2379,etcd-2:2379,etcd-3:2379
+bootstrap:
+  # Applied once, when the cluster is first created. Change it afterwards with `patronictl edit-config`.
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_log_hints: "on"
+        max_wal_senders: 10
+        max_replication_slots: 10
+postgresql:
+  listen: 0.0.0.0:5432
+  data_dir: /var/lib/postgresql/data/pgdata
+  bin_dir: /usr/lib/postgresql/18/bin
+  pgpass: /tmp/pgpass
+  # Patroni manages its local Postgres over the unix socket.
+  use_unix_socket: true
+  use_unix_socket_repl: false
+  authentication:
+    superuser:
+      username: postgres
+      password: '{{ secret "superuser_password" }}'
+    replication:
+      username: replicator
+      password: '{{ secret "replication_password" }}'
+  pg_hba:
+    - local all all trust
+    - host all all 127.0.0.1/32 scram-sha-256
+    - host all all ::1/128 scram-sha-256
+    - host replication replicator 127.0.0.1/32 scram-sha-256
+    - host replication replicator ::1/128 scram-sha-256
+    - host replication replicator {{ env "HIPPO_SUBNET" }} scram-sha-256
+    - host all all {{ env "HIPPO_SUBNET" }} scram-sha-256
