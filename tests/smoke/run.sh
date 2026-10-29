@@ -4,6 +4,8 @@
 # Smoke test: deploys deploy/stack.yml on a throwaway 3-node dind swarm with the given hippo image,
 # forces a rolling update of every Postgres member under write load, and checks that:
 #   - the templated member hostnames resolve,
+#   - an app on hippo-clients reaches the primary through HAProxy, and no member of the cluster directly,
+#   - only members can call Patroni's state-changing REST endpoints,
 #   - the cluster converges back to 1 leader + 2 streaming replicas,
 #   - every write acknowledged to the client (libpq multi-host and HAProxy) is in the table, once,
 #     and the table holds nothing that was not attempted. A write whose attempt failed may or may not
@@ -71,6 +73,15 @@ for h in pg-1 pg-2 pg-3 etcd-1 etcd-2 etcd-3; do
 done
 log "member hostnames resolve"
 
+# A container on the client network, like an app.
+client() { node docker run --rm --network hippo-clients -e PGPASSWORD="$SUPERUSER_PW" "$IMAGE" "$@"; }
+wait_for 60 "an app on hippo-clients to reach the primary through HAProxy" \
+  client psql "host=tasks.haproxy port=5000 dbname=postgres user=postgres connect_timeout=5" -Atc "select 1"
+for h in pg-1 etcd-1; do
+  if client getent hosts "$h" >/dev/null 2>&1; then fail "$h resolves on hippo-clients"; fi
+done
+log "apps on hippo-clients reach Postgres through HAProxy only"
+
 log "starting writer"
 node_in sh -c 'cat > /deploy/writer.sh' < "$HERE/writer.sh"
 node docker config create smoke_writer /deploy/writer.sh >/dev/null
@@ -83,6 +94,17 @@ log "forcing a rolling update of every Postgres member"
 quiet node docker service update --force --quiet hippo_pg
 wait_for 300 "the cluster to converge after the rolling update" converged
 log "cluster converged after rolling update"
+
+# Checked after the update, when every member has a new address.
+quiet svc hippo_pg patronictl -c /etc/patroni.yml reload hippo --force
+svc smoke_writer python3 -c '
+import urllib.error, urllib.request
+try:
+    urllib.request.urlopen(urllib.request.Request("http://pg-1:8008/reload", method="POST"), timeout=5)
+except urllib.error.HTTPError as e:
+    raise SystemExit(e.code != 403)
+raise SystemExit(1)' || fail "a non-member called Patroni's POST /reload without being refused"
+log "only members can change the cluster through Patroni's REST API"
 
 svc smoke_writer touch /tmp/stop
 wait_for 30 "the writer totals" sh -c 'docker exec hippo-lab1 docker service logs --raw smoke_writer 2>/dev/null | grep -q TOTAL'
