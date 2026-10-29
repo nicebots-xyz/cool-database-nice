@@ -56,7 +56,7 @@ volumes:
 
 services:
   etcd:
-    image: quay.io/coreos/etcd:v3.6.16
+    image: quay.io/coreos/etcd:v3.7.3
     # The templated hostname is resolvable on the overlay and follows IP changes, so peer URLs
     # stay valid across restarts without any membership changes.
     hostname: "etcd-{{.Task.Slot}}"
