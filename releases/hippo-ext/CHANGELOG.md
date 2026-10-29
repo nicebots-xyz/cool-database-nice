@@ -1,3 +1,21 @@
+## hippo-ext@0.1.1
+
+### Passwords ignore a trailing newline in the secrets ([#27](https://github.com/nicebots-xyz/hippo/pull/27))
+
+`deploy/patroni.yml.tmpl` reads the superuser and replication passwords as folded scalars, so a secret created with a trailing newline (`openssl rand -hex 32 | docker secret create …`) no longer becomes a password ending in a space that clients reading the secret with `$(cat …)` cannot match. Secrets without a newline give the same password as before. The stack's config key is now `patroni_v2`.
+
+Clusters bootstrapped from such a secret keep the old password: run `ALTER ROLE` for `postgres` and `replicator` on the leader before redeploying.
+
+### Upgrade docker/dockerfile docker tag to v1.28.0 ([#11](https://github.com/nicebots-xyz/hippo/pull/11))
+
+
+
+### Upgrade dependency etcd-io/etcd to v3.7.3 ([#6](https://github.com/nicebots-xyz/hippo/pull/6))
+
+
+
+### Upgrade haproxy docker tag to v3.4.7 ([#12](https://github.com/nicebots-xyz/hippo/pull/12))
+
 ## hippo-ext@0.1.0
 
 ### Apps connect on their own network ([#24](https://github.com/nicebots-xyz/hippo/pull/24))
