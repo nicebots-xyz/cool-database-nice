@@ -13,8 +13,7 @@
     "**/__tests__/**",
     "**/test/**",
     "**/tests/**",
-    "**/__fixtures__/**",
-    "lab/**"
+    "**/__fixtures__/**"
   ],
   "ignoreDeps": ["hippo-base"],
   "pip-compile": {
