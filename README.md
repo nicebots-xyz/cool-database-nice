@@ -89,7 +89,7 @@ Apps join the `hippo-clients` network.
 | `haproxy:5000` | the primary |
 | `haproxy:5001` | the replicas |
 
-## Not yet included
+## Not included
 
 - backups
 - PgBouncer
