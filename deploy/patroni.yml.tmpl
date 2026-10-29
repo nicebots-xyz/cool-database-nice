@@ -31,13 +31,17 @@ postgresql:
   # Patroni manages its local Postgres over the unix socket.
   use_unix_socket: true
   use_unix_socket_repl: false
+  # Folded scalars (>-) drop a trailing newline in the secret (`openssl rand … | docker secret create`),
+  # which a quoted scalar would turn into a trailing space, so clients reading it with $(cat …) still match.
   authentication:
     superuser:
       username: postgres
-      password: '{{ secret "superuser_password" }}'
+      password: >-
+        {{ secret "superuser_password" }}
     replication:
       username: replicator
-      password: '{{ secret "replication_password" }}'
+      password: >-
+        {{ secret "replication_password" }}
   pg_hba:
     - local all all trust
     - host all all 127.0.0.1/32 scram-sha-256

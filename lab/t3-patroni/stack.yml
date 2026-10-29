@@ -10,7 +10,7 @@ secrets:
   pg_replication_password:
     file: ./repl.secret
 configs:
-  patroni_v2:
+  patroni_v3:
     file: ./patroni.yml.tmpl
     template_driver: golang
   pg_haproxy_v1:
@@ -29,7 +29,7 @@ services:
       PATRONI_POSTGRESQL_CONNECT_ADDRESS: "pg-{{.Task.Slot}}:5432"
     secrets: [pg_superuser_password, pg_replication_password]
     configs:
-      - source: patroni_v2
+      - source: patroni_v3
         target: /etc/patroni.yml
         uid: "999"
         gid: "999"
