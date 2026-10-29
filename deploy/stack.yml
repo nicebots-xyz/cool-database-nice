@@ -42,7 +42,7 @@ secrets:
     name: ${HIPPO_REPLICATION_SECRET:-hippo_replication_password_v1}
 
 configs:
-  patroni_v1:
+  patroni_v2:
     file: ./patroni.yml.tmpl
     template_driver: golang
   haproxy_v1:
@@ -102,7 +102,7 @@ services:
       - source: replication_password
         target: replication_password
     configs:
-      - source: patroni_v1
+      - source: patroni_v2
         target: /etc/patroni.yml
         uid: "999"
         gid: "999"

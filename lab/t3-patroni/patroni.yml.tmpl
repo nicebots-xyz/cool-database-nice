@@ -28,10 +28,12 @@ postgresql:
   authentication:
     superuser:
       username: postgres
-      password: '{{ secret "pg_superuser_password" }}'
+      password: >-
+        {{ secret "pg_superuser_password" }}
     replication:
       username: replicator
-      password: '{{ secret "pg_replication_password" }}'
+      password: >-
+        {{ secret "pg_replication_password" }}
   pg_hba:
     - local all all trust
     - host all all 127.0.0.1/32 scram-sha-256
