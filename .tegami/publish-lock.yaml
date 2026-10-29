@@ -1,0 +1,48 @@
+core:changelogs:
+  - content: "---\npackages:\n  hippo:\n    type: minor\n---\n\n### Apps connect on their own network\n\nApps join the `hippo-clients` network and reach Postgres through HAProxy (`haproxy:5000` for the primary, `:5001` for the replicas). The cluster network `hippo` is no longer attachable, so apps can't reach etcd or Patroni's REST API, and Patroni only accepts state-changing REST calls (restart, failover, configuration, …) from cluster members.\n\nBoth networks are encrypted: traffic between nodes goes over IPsec, so IP protocol 50 (ESP) must be allowed between them.\n"
+    filename: client-network.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: patch\n---\n\n### Images link to their source repository\n\nBoth images carry the `org.opencontainers.image.source` label, so registries link them to `nicebots-xyz/hippo`.\n"
+    filename: image-source-label.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: minor\n---\n\n## Initial release\n\nHA PostgreSQL 18 for Docker Swarm: Patroni 4.1.5 + etcd + HAProxy, deployed with a single `docker stack deploy`.\n\n- `base` image: PostgreSQL 18 with its bundled extensions and Patroni.\n- `ext` image: `base` plus pgvector, pg_cron, pg_partman, pgaudit, pg_repack, hypopg and pg_stat_kcache.\n- Reference stack in `deploy/`, validated by a smoke test that rolls every Postgres member under write load without losing an acknowledged write.\n- MIT licensed, with an SPDX header on every source file.\n"
+    filename: initial-release.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: patch\n---\n\n### Pin the Dockerfile frontend to an exact version\n\nImages are built with `docker/dockerfile:1.27.1` by digest instead of the moving `1` tag, so frontend updates arrive as versioned, cooled-down updates.\n"
+    filename: pin-dockerfile-frontend.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: patch\n---\n\n### Patroni uses the system libpq\n\nPatroni's driver is the pure-Python `psycopg` on Debian's `libpq5` instead of the `psycopg-binary` wheel, which bundled its own copies of libpq, OpenSSL, Kerberos and LDAP built for CentOS 7, without license metadata.\n"
+    filename: psycopg-system-libpq.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: patch\n---\n\n### Lock Patroni's Python dependencies with a 7-day cooldown\n\nThe lock only takes releases at least 7 days old, matching Renovate's cooldown for PyPI updates.\nRenovate keeps the lock up to date through lock file maintenance.\n"
+    filename: python-lock-cooldown.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: patch\n---\n\n### The Python lock file no longer stays in an image layer\n\nThe base image mounts `requirements.lock` for the Patroni install instead of copying it in, so the file is no longer kept in a layer of its own.\n"
+    filename: requirements-bind-mount.md
+    v: 0.0.0
+  - content: "---\npackages:\n  hippo:\n    type: patch\n---\n\n### SBOM covering everything in the images\n\nImages are published with SPDX SBOM and build provenance attestations. The SBOM lists every package and every component no package manager owns (gosu, the postgres entrypoint scripts, hippo's own tooling), each with its license, and releases are refused when anything in the image is missing from it. See `docs/licenses.md`.\n"
+    filename: sbom.md
+    v: 0.0.0
+core:packages:
+  - changelogIds:
+      - client-network.md
+      - image-source-label.md
+      - initial-release.md
+      - pin-dockerfile-frontend.md
+      - psycopg-system-libpq.md
+      - python-lock-cooldown.md
+      - requirements-bind-mount.md
+      - sbom.md
+    id: release:hippo
+    updated: true
+  - changelogIds:
+      - client-network.md
+      - image-source-label.md
+      - initial-release.md
+      - pin-dockerfile-frontend.md
+      - psycopg-system-libpq.md
+      - python-lock-cooldown.md
+      - requirements-bind-mount.md
+      - sbom.md
+    id: release:hippo-ext
+    updated: true

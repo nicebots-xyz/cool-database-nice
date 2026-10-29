@@ -1,0 +1,3 @@
+source=a6f73347ada885a50436a8f14eda1b3299cf2cf4
+pg=18
+image=ghcr.io/nicebots-xyz/hippo@sha256:d096e3eb8b11609c7756c52d47e55e54c046681cbf14332e7f1adfc246f108dd
