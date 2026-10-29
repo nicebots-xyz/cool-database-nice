@@ -56,6 +56,7 @@ Both `pg` and `etcd` are **single replicated services**, not one service per mem
 | Healthchecks never depend on peers | Swarm publishes a task's DNS names only once it is healthy; a check that needs other members (e.g. etcd quorum) deadlocks bootstrap. etcd has none; Patroni's checks its own Postgres only |
 | Safe rollouts | `update_config: {parallelism: 1, order: stop-first}`, `stop_grace_period: 120s` |
 | Config | Patroni YAML as a `template_driver: golang` Docker config; passwords via `{{ secret "…" }}` |
+| Encrypted traffic | Both overlay networks set `encrypted` (IPsec ESP between nodes) |
 | Apps can't touch the cluster | Apps join `hippo-clients`, where only HAProxy is. etcd and Patroni's REST API stay on `hippo`, and Patroni accepts state-changing REST calls from members only (`allowlist_include_members`) |
 
 etcd runs the **stock upstream image**, configured purely through `ETCD_*` env vars with

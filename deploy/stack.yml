@@ -4,6 +4,7 @@
 #
 # Prerequisites:
 #   - exactly 3 nodes labelled hippo.pg=true (docker node update --label-add hippo.pg=true <node>)
+#   - IP protocol 50 (ESP) allowed between nodes: both overlay networks are encrypted (IPsec)
 #   - secrets: printf '%s' "$PW" | docker secret create hippo_superuser_password_v1 -
 #              printf '%s' "$PW" | docker secret create hippo_replication_password_v1 -
 # Deploy:
@@ -19,6 +20,8 @@ networks:
   hippo:
     name: ${HIPPO_NETWORK:-hippo}
     driver: overlay
+    driver_opts:
+      encrypted: "true"
     ipam:
       config:
         - subnet: ${HIPPO_SUBNET:-10.77.0.0/24}
@@ -26,6 +29,8 @@ networks:
   clients:
     name: ${HIPPO_CLIENT_NETWORK:-hippo-clients}
     driver: overlay
+    driver_opts:
+      encrypted: "true"
     attachable: true
 
 secrets:
