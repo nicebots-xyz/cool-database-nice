@@ -3,6 +3,8 @@
 scope: hippo
 restapi:
   listen: 0.0.0.0:8008
+  # Only cluster members may call the endpoints that change state (restart, failover, config, ...).
+  allowlist_include_members: true
 etcd3:
   hosts: etcd-1:2379,etcd-2:2379,etcd-3:2379
 bootstrap:

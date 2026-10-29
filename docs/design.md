@@ -35,8 +35,9 @@ Concretely:
 ## Architecture
 
 ```
- apps ──► HAProxy (:5000 → primary)          or libpq: host=pg-1,pg-2,pg-3
-             │  health check GET :8008/primary     target_session_attrs=read-write
+ apps ──► HAProxy (:5000 → primary, :5001 → replicas)      network hippo-clients (attachable)
+ ────────────┼──────────────────────────────────────────────────────────────────────────────
+             │  health check GET :8008/primary             network hippo (cluster only)
      ┌───────┼────────────┐
    pg-1     pg-2        pg-3      one replicated service `pg` (replicas: 3)
  Patroni   Patroni     Patroni    Patroni runs Postgres; streaming replication
@@ -55,6 +56,7 @@ Both `pg` and `etcd` are **single replicated services**, not one service per mem
 | Healthchecks never depend on peers | Swarm publishes a task's DNS names only once it is healthy; a check that needs other members (e.g. etcd quorum) deadlocks bootstrap. etcd has none; Patroni's checks its own Postgres only |
 | Safe rollouts | `update_config: {parallelism: 1, order: stop-first}`, `stop_grace_period: 120s` |
 | Config | Patroni YAML as a `template_driver: golang` Docker config; passwords via `{{ secret "…" }}` |
+| Apps can't touch the cluster | Apps join `hippo-clients`, where only HAProxy is. etcd and Patroni's REST API stay on `hippo`, and Patroni accepts state-changing REST calls from members only (`allowlist_include_members`) |
 
 etcd runs the **stock upstream image**, configured purely through `ETCD_*` env vars with
 peer URLs set to the templated hostnames. No custom entrypoint.
@@ -72,8 +74,10 @@ Docker 29.9.2 dind Swarm, HAProxy 3.2, etcd 3.6.5, Patroni 4.1.5, PG 18.6 — se
 
 ### Client rules
 
-- Connect via HAProxy, or via libpq with **`host=pg-1,pg-2,pg-3`**. A single multi-address
-  name (`host=pg`) does *not* work with `target_session_attrs`.
+- Apps join `hippo-clients` and connect via HAProxy: `haproxy:5000` (primary), `:5001` (replicas).
+- Trusted Swarm services can join `hippo` instead and connect via libpq with
+  **`host=pg-1,pg-2,pg-3`**, which also reaches etcd. A single multi-address name (`host=pg`)
+  does *not* work with `target_session_attrs`.
 - During a failover, connections fail fast. Clients should retry with backoff (~10 s) on
   `08xxx`, `57P01`, `25006`; in-flight transactions on the old leader always need an
   app-level retry.

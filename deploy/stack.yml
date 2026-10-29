@@ -8,19 +8,25 @@
 #              printf '%s' "$PW" | docker secret create hippo_replication_password_v1 -
 # Deploy:
 #   HIPPO_IMAGE=<image@digest> docker stack deploy -c stack.yml hippo
+# Connect: attach the app to the hippo-clients network and use haproxy:5000 (primary) or :5001 (replicas).
 #
 # Configs and secrets are immutable: to change one, add a new version (patroni_v2, …_v2) and point
 # the service at it. Patroni's dynamic settings (postgresql.parameters, …) live in etcd after
 # bootstrap: change them with `patronictl edit-config`, not in patroni.yml.tmpl.
 
 networks:
+  # The cluster's own network. etcd has no authentication, so apps stay off it.
   hippo:
     name: ${HIPPO_NETWORK:-hippo}
     driver: overlay
-    attachable: true
     ipam:
       config:
         - subnet: ${HIPPO_SUBNET:-10.77.0.0/24}
+  # What apps join. Only HAProxy is on it.
+  clients:
+    name: ${HIPPO_CLIENT_NETWORK:-hippo-clients}
+    driver: overlay
+    attachable: true
 
 secrets:
   superuser_password:
@@ -117,7 +123,7 @@ services:
 
   haproxy:
     image: haproxy:3.2.26-alpine
-    networks: [hippo]
+    networks: [hippo, clients]
     configs:
       - source: haproxy_v1
         target: /usr/local/etc/haproxy/haproxy.cfg
